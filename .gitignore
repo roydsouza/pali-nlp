@@ -1,0 +1,26 @@
+# Python
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+dist/
+build/
+.venv/
+.env
+
+# Data — never commit the DPD database or derived corpora
+data/dpd.db
+data/corpus/
+data/frequency/
+data/*.pkl
+data/*.json
+data/*.tsv
+
+# Test artefacts
+.pytest_cache/
+.coverage
+htmlcov/
+
+# macOS
+.DS_Store
