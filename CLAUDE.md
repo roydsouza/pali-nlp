@@ -49,11 +49,17 @@ pytest
 
 ## DPD Database
 
-The pipeline runs in **stub mode** if `dpd.db` is absent — all tests pass, the architecture is exercisable, but headwords get no glosses. Once the DB is present, stub mode deactivates automatically.
+The DPD database is already installed on this machine via Simsapa Dhamma Reader:
 
-Download from: https://github.com/digitalpalidictionary/dpd-db/releases  
-Expected path: `data/dpd.db` (or set `PALI_DPD`)  
-The DB is git-ignored and must never be committed.
+    ~/Library/Application Support/simsapa/assets/dpd.sqlite3
+
+The lemmatizer defaults to this path automatically — no configuration needed. Set `PALI_DPD` to override.
+
+The DB is git-ignored and must never be committed. It uses two tables:
+- `lookup` (1.1M rows) — maps inflected forms to headwords via `lookup_key` → `grammar` JSON
+- `dpd_headwords` — canonical headwords with `lemma_clean`, `pos`, `meaning_1`, `ebt_count`
+
+The pipeline runs in **stub mode** if the DB is absent (useful for CI/tests without the DB).
 
 ## CLI Tools
 

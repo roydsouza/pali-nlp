@@ -22,7 +22,11 @@ export PALI_DPD=/path/to/data/dpd.db   # DPD SQLite (see below)
 
 ### DPD Database
 
-Download `dpd.db` (~500 MB) from the [DPD releases page](https://github.com/digitalpalidictionary/dpd-db/releases) and place it at `data/dpd.db` (or set `PALI_DPD`). The pipeline runs in stub mode without it — all tests pass, but vocabulary blocks will have no glosses.
+Already installed via Simsapa Dhamma Reader at:
+
+    ~/Library/Application Support/simsapa/assets/dpd.sqlite3
+
+No configuration needed — the lemmatizer finds it automatically. Set `PALI_DPD` to override the path.
 
 ---
 
