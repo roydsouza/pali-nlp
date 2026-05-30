@@ -95,14 +95,93 @@ class DPDLemmatizer:
         return result or _stub(token)
 
     def lookup_many(self, tokens: list[str]) -> list[LemmaResult]:
-        """Batch lookup preserving order; reuses cached results for duplicates."""
+        """
+        Batch lookup preserving order.
+
+        For lists > BATCH_THRESHOLD unique tokens, pre-fetches all from the
+        lookup table in a single IN(...) query, falling back to per-token
+        lookup for misses. This makes corpus-wide passes ~100× faster.
+        """
+        BATCH_THRESHOLD = 20
+        unique = list(dict.fromkeys(tokens))  # deduplicated, order-preserving
         cache: dict[str, LemmaResult] = {}
-        out = []
-        for tok in tokens:
+
+        if not self._stub_mode and self._conn is not None and len(unique) >= BATCH_THRESHOLD:
+            self._bulk_prefetch(unique, cache)
+
+        for tok in unique:
             if tok not in cache:
                 cache[tok] = self.lookup(tok)
-            out.append(cache[tok])
-        return out
+
+        return [cache[tok] for tok in tokens]
+
+    _CHUNK = 500  # safely below SQLite's 999-variable limit
+
+    def _bulk_prefetch(self, tokens: list[str], cache: dict[str, LemmaResult]) -> None:
+        """
+        Fetch all tokens from DPD in chunked IN queries.
+
+        Two-pass strategy:
+          1. lookup table → grammar JSON → headword list
+          2. dpd_headwords bulk fetch for all headwords found in pass 1
+             + direct match for tokens that are themselves headwords (misses in pass 1)
+        """
+        assert self._conn
+        found_keys: set[str] = set()
+        # token → (headword, pos) from lookup table
+        token_hw: dict[str, tuple[str, str]] = {}
+
+        for chunk in _chunks(tokens, self._CHUNK):
+            ph = ",".join("?" * len(chunk))
+            for row in self._conn.execute(
+                f"SELECT lookup_key, grammar FROM lookup WHERE lookup_key IN ({ph})",
+                chunk,
+            ).fetchall():
+                key = row["lookup_key"]
+                found_keys.add(key)
+                try:
+                    grammar = json.loads(row["grammar"] or "[]")
+                except (json.JSONDecodeError, TypeError):
+                    continue
+                if grammar and isinstance(grammar[0], list) and grammar[0]:
+                    hw = grammar[0][0]
+                    pos = grammar[0][1] if len(grammar[0]) > 1 else "?"
+                    token_hw[key] = (hw, pos)
+
+        # Bulk-fetch meanings for all headwords found in pass 1
+        headwords_needed = list({hw for hw, _ in token_hw.values()})
+        hw_data: dict[str, tuple[str, int]] = {}
+        for chunk in _chunks(headwords_needed, self._CHUNK):
+            ph = ",".join("?" * len(chunk))
+            for row in self._conn.execute(
+                f"SELECT lemma_clean, meaning_1, ebt_count "
+                f"FROM dpd_headwords WHERE lemma_clean IN ({ph})",
+                chunk,
+            ).fetchall():
+                hw_data[row["lemma_clean"]] = (row["meaning_1"] or "", row["ebt_count"] or 0)
+
+        for token, (hw, pos) in token_hw.items():
+            meaning, ebt = hw_data.get(hw, ("", 0))
+            cache[token] = LemmaResult(
+                token=token, headword=hw, pos=pos,
+                meaning=meaning, ebt_count=ebt, found=True,
+            )
+
+        # Tokens not in lookup table → try direct headword match
+        misses = [t for t in tokens if t not in found_keys]
+        for chunk in _chunks(misses, self._CHUNK):
+            ph = ",".join("?" * len(chunk))
+            for row in self._conn.execute(
+                f"SELECT lemma_clean, pos, meaning_1, ebt_count "
+                f"FROM dpd_headwords WHERE lemma_clean IN ({ph})",
+                chunk,
+            ).fetchall():
+                lc = row["lemma_clean"]
+                cache[lc] = LemmaResult(
+                    token=lc, headword=lc, pos=row["pos"] or "?",
+                    meaning=row["meaning_1"] or "", ebt_count=row["ebt_count"] or 0,
+                    found=True,
+                )
 
     def lookup_unique(self, tokens: list[str]) -> dict[str, LemmaResult]:
         """One result per unique headword (first token to map to it wins)."""
@@ -184,6 +263,11 @@ class DPDLemmatizer:
         if row is None:
             return "", 0
         return row["meaning_1"] or "", row["ebt_count"] or 0
+
+
+def _chunks(lst: list, n: int):
+    for i in range(0, len(lst), n):
+        yield lst[i : i + n]
 
 
 def _stub(token: str) -> LemmaResult:

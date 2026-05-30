@@ -9,9 +9,8 @@ consistent corpus frequencies rather than per-sutta counts.
 from __future__ import annotations
 
 from collections import Counter
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Iterator
 
 from pali_nlp.dpd.lemmatizer import DPDLemmatizer, LemmaResult
 from pali_nlp.ingestion.vault_reader import SuttaDoc, iter_mula_docs
@@ -21,21 +20,23 @@ from pali_nlp.ingestion.vault_reader import SuttaDoc, iter_mula_docs
 class CorpusFrequency:
     """Frequency tables built from the full vault corpus."""
 
-    token_freq: Counter[str]          # raw token counts
-    headword_freq: Counter[str]       # lemma headword counts
+    token_freq: Counter[str]
+    headword_freq: Counter[str]
     total_tokens: int
     total_unique_headwords: int
+    # Pre-built rank index: headword → 1-based rank (1 = most common)
+    _rank_index: dict[str, int] = field(default_factory=dict, repr=False)
+
+    def __post_init__(self) -> None:
+        self._rank_index = {
+            hw: i for i, (hw, _) in enumerate(self.headword_freq.most_common(), start=1)
+        }
 
     def rank(self, headword: str) -> int:
-        """1-based frequency rank (1 = most common). Returns 0 if not found."""
-        ranked = self.headword_freq.most_common()
-        for i, (hw, _) in enumerate(ranked, start=1):
-            if hw == headword:
-                return i
-        return 0
+        """1-based frequency rank. Returns 0 if not found."""
+        return self._rank_index.get(headword, 0)
 
     def is_common(self, headword: str, top_n: int = 200) -> bool:
-        """True if headword is in the top-N most frequent across the corpus."""
         return self.rank(headword) <= top_n
 
 
@@ -45,15 +46,26 @@ def build_corpus_frequency(
 ) -> CorpusFrequency:
     """
     Walk all mūla docs and build token + headword frequency tables.
-    Expensive first call; cache the result externally if needed.
+
+    Collects all unique tokens first, bulk-fetches from DPD in one pass,
+    then maps token counts to headword counts — avoids N SQLite round-trips.
     """
     token_freq: Counter[str] = Counter()
-    headword_freq: Counter[str] = Counter()
 
+    # First pass: count tokens across all docs
     for doc in iter_mula_docs(vault_root):
         token_freq.update(doc.pali_tokens)
-        results = lemmatizer.lookup_many(doc.pali_tokens)
-        headword_freq.update(r.headword for r in results)
+
+    # Bulk lookup of all unique tokens (lemmatizer caches per token internally)
+    unique_tokens = list(token_freq.keys())
+    results = lemmatizer.lookup_many(unique_tokens)
+    token_to_headword = {r.token: r.headword for r in results}
+
+    # Map token counts → headword counts
+    headword_freq: Counter[str] = Counter()
+    for token, count in token_freq.items():
+        hw = token_to_headword.get(token, token)
+        headword_freq[hw] += count
 
     return CorpusFrequency(
         token_freq=token_freq,
@@ -69,24 +81,16 @@ def sutta_difficulty_score(
     lemmatizer: DPDLemmatizer,
 ) -> float:
     """
-    Compute a difficulty score for one sutta.
-
-    Lower score = more common vocabulary = easier to read.
-    Score = mean inverse frequency rank of the sutta's unique headwords,
-    ignoring the top-50 corpus-wide words (they appear everywhere and
-    don't differentiate difficulty).
+    Difficulty score for one sutta: mean rank of unique non-common headwords.
+    Lower = easier (more common vocabulary). Skips top-50 corpus words.
     """
     if not doc.pali_tokens:
         return 0.0
 
     results = lemmatizer.lookup_unique(doc.pali_tokens)
-    scores = []
-    for r in results.values():
-        rank = corpus_freq.rank(r.headword)
-        if rank == 0 or rank <= 50:
-            continue
-        scores.append(rank)
-
-    if not scores:
-        return 0.0
-    return sum(scores) / len(scores)
+    scores = [
+        corpus_freq.rank(r.headword)
+        for r in results.values()
+        if corpus_freq.rank(r.headword) > 50
+    ]
+    return sum(scores) / len(scores) if scores else 0.0
