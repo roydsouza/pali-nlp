@@ -19,6 +19,7 @@ from pali_nlp.ingestion.vault_reader import SuttaDoc, iter_mula_docs
 @dataclass
 class GradedEntry:
     sutta_id: str
+    file_stem: str        # actual filename stem for reliable wikilinks
     nikaya: str
     title: str
     score: float          # mean frequency rank of unique non-common headwords
@@ -48,6 +49,7 @@ def build_graded_list(
         ))
         entries.append(GradedEntry(
             sutta_id=doc.sutta_id,
+            file_stem=doc.path.stem,
             nikaya=doc.nikaya,
             title=doc.title,
             score=score,
@@ -61,6 +63,15 @@ def build_graded_list(
 def render_graded_markdown(entries: list[GradedEntry]) -> str:
     """Render the graded list as a Markdown table for the vault."""
     lines = [
+        "---",
+        "id: graded_reader",
+        "title: Pali Graded Reader",
+        "type: path",
+        "tags:",
+        "  - graded-reader",
+        "  - pali-nlp",
+        "---",
+        "",
         "# Pali Graded Reader",
         "",
         "Suttas ordered by vocabulary difficulty (easiest first).",
@@ -71,9 +82,10 @@ def render_graded_markdown(entries: list[GradedEntry]) -> str:
         "|---|---|---|---|---|---|",
     ]
     for i, e in enumerate(entries, start=1):
+        nikaya_label = e.nikaya.replace('_nikaya', '').replace('_', ' ').title()
         lines.append(
-            f"| {i} | [[{e.sutta_id.lower()}\\|{e.sutta_id}]] "
-            f"| {e.nikaya.replace('_nikaya', '').replace('_', ' ').title()} "
+            f"| {i} | [[{e.file_stem}\\|{e.sutta_id}]] "
+            f"| {nikaya_label} "
             f"| {e.score:.0f} | {e.token_count} | {e.unique_headwords} |"
         )
     return "\n".join(lines) + "\n"
