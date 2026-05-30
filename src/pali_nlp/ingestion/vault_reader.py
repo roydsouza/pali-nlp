@@ -25,7 +25,11 @@ _BOLD_RE = re.compile(r"^\*\*(.+?)\*\*\s*$", re.MULTILINE)
 # YAML frontmatter block
 _FRONTMATTER_RE = re.compile(r"^---\s*\n(.*?)\n---\s*\n", re.DOTALL)
 
-# Punctuation to strip when tokenizing (keep diacritics, hyphens inside words)
+# Curly/typographic quotes and apostrophes (common in Sujato's Pali texts)
+_CURLY_RE = re.compile(r"['‘’“”`]+")
+# Pali quotative particle 'ti / iti appended to quoted phrases
+_ITI_RE = re.compile(r"'ti$|ti$", re.IGNORECASE)
+# Remaining punctuation to strip (keep diacritics, hyphens inside words)
 _PUNCT_RE = re.compile(r"[,;:.!?()\[\]{}'\"…—\|·°]+")
 
 
@@ -64,10 +68,12 @@ def _extract_pali_tokens(text: str) -> tuple[str, list[str]]:
     raw = " ".join(segments)
     tokens = []
     for seg in segments:
-        cleaned = _PUNCT_RE.sub(" ", seg)
+        cleaned = _CURLY_RE.sub("", seg)       # strip curly quotes/apostrophes
+        cleaned = _PUNCT_RE.sub(" ", cleaned)   # strip remaining punctuation
         for tok in cleaned.split():
+            tok = _ITI_RE.sub("", tok)          # strip 'ti / ti quotative suffix
             tok = tok.strip("-").lower()
-            if tok:
+            if len(tok) > 1:                    # skip single-char noise
                 tokens.append(tok)
     return raw, tokens
 
