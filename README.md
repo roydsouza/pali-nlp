@@ -43,6 +43,11 @@ pali-grade --out $PALI_VAULT/paths/graded_reader.md
 pali-write --dry-run     # preview changes
 pali-write               # write to vault
 pali-write --sutta MN10  # single sutta
+
+# Generate spaced-repetition vocabulary cards
+pali-srs --sutta MN10    # single sutta
+pali-srs --top 200       # core vocabulary deck
+pali-srs --all-suttas    # all suttas in vault
 ```
 
 After any write pass, run the vault's link validator:
@@ -50,6 +55,14 @@ After any write pass, run the vault's link validator:
 ```bash
 cd $PALI_VAULT && python3 scratch/validate_links.py
 ```
+
+---
+
+## Documentation
+
+For CLI usage, references, and Obsidian setup, see the workstation tutorial:
+* [Tutorial 7: Vocabulary Spaced Repetition (SRS)](file:///Users/rds/pali_canon/tutorial/07_vocabulary_srs.md)
+
 
 ---
 
@@ -76,7 +89,7 @@ src/pali_nlp/
 | 1A — Ingestion & Lemmatization | ✅ | vault_reader + DPD lemmatizer |
 | 1B — Frequency & Graded Reader | ✅ | corpus frequency + difficulty ranking |
 | 1C — Vocabulary Writer | ✅ | inject vocab callouts into vault files |
-| 1D — SRS Cards | planned | Obsidian spaced-repetition card generation |
+| 1D — SRS Cards | ✅ | Obsidian spaced-repetition card generation |
 | 2A — Concordance Index | planned | offline concordance + collocation search |
 | 2B — NER / Prosopography | planned | Named entity tagger → vault people/ pages |
 | 3A — Vector Search | planned | local embeddings + semantic search |
@@ -87,6 +100,6 @@ src/pali_nlp/
 ## Tests
 
 ```bash
-pytest          # 14 tests, no DB required
+pytest          # 19 tests, no DB required
 ruff check src/ tests/
 ```
