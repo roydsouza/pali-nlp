@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
-import click
 from pathlib import Path
+
+import click
 
 from pali_nlp.analysis.frequency import build_corpus_frequency
 from pali_nlp.analysis.graded_reader import build_graded_list, render_graded_markdown

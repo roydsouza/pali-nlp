@@ -28,7 +28,6 @@ import sqlite3
 import warnings
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional
 
 
 @dataclass(frozen=True)
@@ -72,7 +71,7 @@ class DPDLemmatizer:
 
     def __init__(self, db_path: Path | str | None = None) -> None:
         self._db_path = Path(db_path) if db_path else _default_db_path()
-        self._conn: Optional[sqlite3.Connection] = None
+        self._conn: sqlite3.Connection | None = None
         # In-memory headword index: lemma_clean → (pos, meaning_1, ebt_count)
         self._hw_map: dict[str, tuple[str, str, int]] = {}
         self._stub_mode = not self._db_path.is_file()
@@ -84,7 +83,7 @@ class DPDLemmatizer:
                 stacklevel=2,
             )
 
-    def __enter__(self) -> "DPDLemmatizer":
+    def __enter__(self) -> DPDLemmatizer:
         if not self._stub_mode:
             self._conn = sqlite3.connect(
                 f"file:{self._db_path}?mode=ro", uri=True, check_same_thread=False

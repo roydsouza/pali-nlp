@@ -8,12 +8,10 @@ from pathlib import Path
 import pytest
 
 from pali_nlp.ingestion.vault_reader import (
-    SuttaDoc,
     _extract_pali_tokens,
     _parse_frontmatter,
     iter_mula_docs,
 )
-
 
 SAMPLE_MULA = textwrap.dedent("""\
     ---

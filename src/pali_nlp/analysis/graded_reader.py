@@ -13,7 +13,7 @@ from pathlib import Path
 
 from pali_nlp.analysis.frequency import CorpusFrequency, sutta_difficulty_score
 from pali_nlp.dpd.lemmatizer import DPDLemmatizer
-from pali_nlp.ingestion.vault_reader import SuttaDoc, iter_mula_docs
+from pali_nlp.ingestion.vault_reader import iter_mula_docs
 
 
 @dataclass

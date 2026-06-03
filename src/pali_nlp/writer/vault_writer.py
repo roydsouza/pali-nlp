@@ -102,3 +102,78 @@ def write_vocab_block(
     if not dry_run:
         doc.path.write_text(new_content, encoding="utf-8")
     return True
+
+
+def update_srs_file(
+    file_path: Path,
+    blocks: dict[str, tuple[str, str, list[tuple[str, str]]]],
+    dry_run: bool = False,
+) -> bool:
+    """
+    Batch update multiple SRS blocks in a single file.
+    blocks: dict mapping target_id -> (deck_name, title, list of (front, back) tuples)
+    Returns True if the file content was (or would be) modified.
+    """
+    original = ""
+    if file_path.is_file():
+        original = file_path.read_text(encoding="utf-8")
+
+    content = original if original else (
+        "---\n"
+        "id: vocabulary_cards\n"
+        "title: Pāḷi Vocabulary Flashcards\n"
+        "type: practice\n"
+        "tags:\n"
+        "  - practice/vocabulary\n"
+        "  - flashcards\n"
+        "---\n\n"
+        "# Pāḷi Vocabulary Flashcards\n\n"
+        "This file contains auto-generated vocabulary flashcards for early Buddhist texts.\n"
+        "Use the Obsidian Spaced Repetition plugin to review them.\n\n"
+        "---\n"
+    )
+
+    modified = False
+
+    for target_id, (deck_name, title, cards) in blocks.items():
+        start_sent = f"<!-- pali-nlp:srs-start target={target_id} -->"
+        end_sent = f"<!-- pali-nlp:srs-end target={target_id} -->"
+
+        pattern = re.compile(
+            r"\n?" + re.escape(start_sent) + r".*?" + re.escape(end_sent) + r"\n?",
+            re.DOTALL,
+        )
+
+        if not cards:
+            if pattern.search(content):
+                content = pattern.sub("", content)
+                modified = True
+            continue
+
+        # Build the block string
+        block_lines = [
+            start_sent,
+            f"### {title}",
+            f"<!-- card-deck: {deck_name} -->",
+            "",
+        ]
+        for front, back in cards:
+            block_lines.append(f"{front} :: {back}")
+        block_lines.append(end_sent)
+        block_str = "\n".join(block_lines)
+
+        if pattern.search(content):
+            new_content = pattern.sub(f"\n{block_str}\n", content)
+        else:
+            new_content = content.rstrip() + f"\n\n{block_str}\n"
+
+        if new_content != content:
+            content = new_content
+            modified = True
+
+    if modified and not dry_run:
+        file_path.parent.mkdir(parents=True, exist_ok=True)
+        file_path.write_text(content, encoding="utf-8")
+
+    return modified
+

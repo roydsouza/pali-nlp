@@ -4,22 +4,18 @@ from __future__ import annotations
 
 import textwrap
 import warnings
+from collections import Counter
 from pathlib import Path
-
-import pytest
 
 from pali_nlp.analysis.frequency import CorpusFrequency
 from pali_nlp.dpd.lemmatizer import DPDLemmatizer
 from pali_nlp.ingestion.vault_reader import SuttaDoc
 from pali_nlp.writer.vault_writer import (
-    _VOCAB_SENTINEL,
     _VOCAB_END,
-    _BLOCK_RE,
+    _VOCAB_SENTINEL,
+    update_srs_file,
     write_vocab_block,
 )
-
-from collections import Counter
-
 
 SAMPLE_MULA = textwrap.dedent("""\
     ---
@@ -95,3 +91,61 @@ def test_write_vocab_block_dry_run_does_not_write(tmp_path):
     assert changed  # reports would-change
     content = (tmp_path / "mn10.md").read_text()
     assert _VOCAB_SENTINEL not in content  # file not touched
+
+
+def test_update_srs_file_creates_and_updates(tmp_path):
+    srs_file = tmp_path / "srs.md"
+    blocks = {
+        "sutta:MN10": (
+            "Vocabulary/MN10",
+            "MN 10: Satipaṭṭhānasutta",
+            [("bhikkhu", "[masc] monk"), ("dhamma", "[masc] teaching")],
+        ),
+    }
+    
+    # 1. Create file and write block
+    changed = update_srs_file(srs_file, blocks)
+    assert changed
+    assert srs_file.is_file()
+    content = srs_file.read_text()
+    assert "<!-- pali-nlp:srs-start target=sutta:MN10 -->" in content
+    assert "<!-- card-deck: Vocabulary/MN10 -->" in content
+    assert "bhikkhu :: [masc] monk" in content
+    assert "dhamma :: [masc] teaching" in content
+
+    # 2. Re-run identical: should not report change
+    changed = update_srs_file(srs_file, blocks)
+    assert not changed
+
+    # 3. Update block content
+    blocks_updated = {
+        "sutta:MN10": (
+            "Vocabulary/MN10",
+            "MN 10: Satipaṭṭhānasutta",
+            [("bhikkhu", "[masc] monk"), ("dhamma", "[masc] teaching"), ("citta", "[neut] mind")],
+        ),
+    }
+    changed = update_srs_file(srs_file, blocks_updated)
+    assert changed
+    content = srs_file.read_text()
+    assert "citta :: [neut] mind" in content
+
+    # 4. Remove block if cards empty
+    blocks_empty = {
+        "sutta:MN10": ("Vocabulary/MN10", "MN 10: Satipaṭṭhānasutta", []),
+    }
+    changed = update_srs_file(srs_file, blocks_empty)
+    assert changed
+    content = srs_file.read_text()
+    assert "<!-- pali-nlp:srs-start target=sutta:MN10 -->" not in content
+
+
+def test_update_srs_file_dry_run(tmp_path):
+    srs_file = tmp_path / "srs.md"
+    blocks = {
+        "sutta:MN10": ("Vocabulary/MN10", "MN 10: Satipaṭṭhānasutta", [("bhikkhu", "[masc] monk")]),
+    }
+    changed = update_srs_file(srs_file, blocks, dry_run=True)
+    assert changed
+    assert not srs_file.is_file()  # not written
+

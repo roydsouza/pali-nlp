@@ -24,6 +24,7 @@ dev = [
 pali-grade    = "pali_nlp.scripts.grade_suttas:main"
 pali-vocab    = "pali_nlp.scripts.build_vocab:main"
 pali-write    = "pali_nlp.scripts.write_vocab_tables:main"
+pali-srs      = "pali_nlp.scripts.write_srs_cards:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/pali_nlp"]

@@ -13,9 +13,9 @@ from __future__ import annotations
 
 import os
 import re
+from collections.abc import Iterator
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Iterator
 
 import yaml
 
@@ -91,7 +91,7 @@ def iter_mula_docs(vault_root: Path | str) -> Iterator[SuttaDoc]:
         text = md_file.read_text(encoding="utf-8")
         fm = _parse_frontmatter(text)
         sutta_id = str(fm.get("id", md_file.stem))
-        title = str(fm.get("title", md_file.stem))
+        title = str(fm.get("title_pali") or fm.get("title") or md_file.stem)
         nikaya = _infer_nikaya(md_file)
         raw_pali, tokens = _extract_pali_tokens(text)
         yield SuttaDoc(
@@ -108,7 +108,7 @@ def iter_mula_docs(vault_root: Path | str) -> Iterator[SuttaDoc]:
 def vault_root_from_env() -> Path:
     v = os.environ.get("PALI_VAULT")
     if not v:
-        raise EnvironmentError("PALI_VAULT environment variable is not set")
+        raise OSError("PALI_VAULT environment variable is not set")
     p = Path(v)
     if not p.is_dir():
         raise FileNotFoundError(f"PALI_VAULT={v} does not exist")

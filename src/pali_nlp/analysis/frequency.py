@@ -12,7 +12,7 @@ from collections import Counter
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from pali_nlp.dpd.lemmatizer import DPDLemmatizer, LemmaResult
+from pali_nlp.dpd.lemmatizer import DPDLemmatizer
 from pali_nlp.ingestion.vault_reader import SuttaDoc, iter_mula_docs
 
 
