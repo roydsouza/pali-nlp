@@ -40,25 +40,35 @@ def _build_vocab_block(
     lemmatizer: DPDLemmatizer,
     corpus_freq: CorpusFrequency,
     max_entries: int = 60,
+    # Words with corpus rank below this threshold are too common to be worth reviewing
+    min_rank: int = 30,
 ) -> str:
     """Build the collapsible vocab callout block for one sutta."""
     unique = lemmatizer.lookup_unique(doc.pali_tokens)
     entries: list[tuple[int, LemmaResult]] = []
     for r in unique.values():
+        # Skip stopwords and unresolved forms (empty gloss + unknown POS)
         if r.headword in _STOPWORDS:
             continue
+        if not r.found:
+            continue  # filter out unresolved sandhi/inflected forms marked (?)
         rank = corpus_freq.rank(r.headword)
-        entries.append((rank if rank > 0 else 999999, r))
+        if rank <= 0:
+            rank = 999999  # unknown rank → treat as very rare; include but sort last
+        if rank < min_rank:
+            continue  # skip very-high-frequency structural words
+        entries.append((rank, r))
 
-    # Sort: rarer words first (higher rank number = rarer), cap at max_entries
-    entries.sort(key=lambda x: -x[0])
+    # Sort by ascending rank (most common learnable words first).
+    # This surfaces mid-frequency practice vocabulary above hyper-rare
+    # anatomical or technical terms that only appear in specialized passages.
+    entries.sort(key=lambda x: x[0])
     entries = entries[:max_entries]
 
     rows = []
     for rank, r in entries:
         gloss = r.meaning[:60] + "…" if len(r.meaning) > 60 else r.meaning
-        found_marker = "" if r.found else " (?)"
-        rows.append(f"| {r.headword}{found_marker} | {r.pos} | {gloss} |")
+        rows.append(f"| {r.headword} | {r.pos} | {gloss} |")
 
     if not rows:
         return ""
@@ -71,7 +81,7 @@ def _build_vocab_block(
 
     return (
         f"\n{_VOCAB_SENTINEL}\n"
-        f"> [!NOTE]- Vocabulary ({len(rows)} entries, rarest first)\n"
+        f"> [!NOTE]- Vocabulary ({len(rows)} entries, most frequent first)\n"
         f"> \n"
         + "\n".join(f"> {line}" for line in table.splitlines())
         + f"\n{_VOCAB_END}\n"
@@ -129,6 +139,7 @@ def update_srs_file(
         "---\n\n"
         "# Pāḷi Vocabulary Flashcards\n\n"
         "This file contains auto-generated vocabulary flashcards for early Buddhist texts.\n"
+        "See [[tutorial/07_vocabulary_srs|Tutorial 7: Vocabulary Spaced Repetition (SRS)]] for CLI commands, reference documentation, and setup instructions.\n"
         "Use the Obsidian Spaced Repetition plugin to review them.\n\n"
         "---\n"
     )
